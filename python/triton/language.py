@@ -14,17 +14,13 @@ def _to_ir(x, builder):
         return builder.get_float32(x)
     if isinstance(x, block):
         return x.handle
-    if isinstance(x, dtype):
-        return x.handle(builder)
-    return x
+    return x.handle(builder) if isinstance(x, dtype) else x
 
 
 def _patch(fn):
     def _from_ir(x):
         if isinstance(x, ir.value):
-            if x.type.is_void():
-                return None
-            return block(x)
+            return None if x.type.is_void() else block(x)
         return tl
 
     def wrapper(*args, **kwargs):
@@ -33,9 +29,7 @@ def _patch(fn):
         args = [_to_ir(x, builder) for x in args]
         kwargs = {k: _to_ir(v, builder) for k, v in kwargs.items()}
         ret = fn(*args, **kwargs)
-        if isinstance(ret, tuple):
-            return map(_from_ir, ret)
-        return _from_ir(ret)
+        return map(_from_ir, ret) if isinstance(ret, tuple) else _from_ir(ret)
 
     return wrapper
 
@@ -244,13 +238,12 @@ class block:
         dst_shape = []
         curr = 0
         for sl in slices:
-            if sl == None:
+            if sl is None:
                 dst_shape.append(1)
             elif sl == slice(None, None, None):
                 dst_shape.append(src_shape[curr])
                 curr += 1
-        ret = frontend.reshape(self, dst_shape, builder)
-        return ret
+        return frontend.reshape(self, dst_shape, builder)
 
     @builtin
     def to(self, dtype, bitcast=False, builder=None):

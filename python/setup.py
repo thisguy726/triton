@@ -35,7 +35,7 @@ def get_llvm():
         except:
             pass
         url = "https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.1/{name}.tar.xz".format(name=name)
-        print('downloading and extracting ' + url + '...')
+        print(f'downloading and extracting {url}...')
         ftpstream = urllib.request.urlopen(url)
         file = tarfile.open(fileobj=ftpstream, mode="r|xz")
         file.extractall(path=dir)
@@ -69,7 +69,7 @@ class CMakeBuild(build_ext):
             )
 
         if platform.system() == "Windows":
-            cmake_version = LooseVersion(re.search(r"version\s*([\d.]+)", out.decode()).group(1))
+            cmake_version = LooseVersion(re.search(r"version\s*([\d.]+)", out.decode())[1])
             if cmake_version < "3.1.0":
                 raise RuntimeError("CMake >= 3.1.0 is required on Windows")
 
@@ -82,7 +82,7 @@ class CMakeBuild(build_ext):
         extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.path)))
         # create build directories
         build_suffix = 'debug' if self.debug else 'release'
-        llvm_build_dir = os.path.join(tempfile.gettempdir(), "llvm-" + build_suffix)
+        llvm_build_dir = os.path.join(tempfile.gettempdir(), f"llvm-{build_suffix}")
         if not os.path.exists(self.build_temp):
             os.makedirs(self.build_temp)
         if not os.path.exists(llvm_build_dir):
@@ -90,29 +90,28 @@ class CMakeBuild(build_ext):
         # python directories
         python_include_dirs = [distutils.sysconfig.get_python_inc()] + ['/usr/local/cuda/include']
         cmake_args = [
-            "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=" + extdir,
+            f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
             "-DBUILD_TUTORIALS=OFF",
             "-DBUILD_PYTHON_MODULE=ON",
-            "-DLLVM_INCLUDE_DIRS=" + llvm_include_dir,
-            "-DLLVM_LIBRARY_DIR=" + llvm_library_dir,
-            #'-DPYTHON_EXECUTABLE=' + sys.executable,
-            #'-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON',
-            "-DTRITON_LLVM_BUILD_DIR=" + llvm_build_dir,
-            "-DPYTHON_INCLUDE_DIRS=" + ";".join(python_include_dirs)
+            f"-DLLVM_INCLUDE_DIRS={llvm_include_dir}",
+            f"-DLLVM_LIBRARY_DIR={llvm_library_dir}",
+            f"-DTRITON_LLVM_BUILD_DIR={llvm_build_dir}",
+            "-DPYTHON_INCLUDE_DIRS=" + ";".join(python_include_dirs),
         ]
+
         # configuration
         cfg = "Debug" if self.debug else "Release"
         build_args = ["--config", cfg]
 
         if platform.system() == "Windows":
-            cmake_args += ["-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{}={}".format(cfg.upper(), extdir)]
+            cmake_args += [f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_{cfg.upper()}={extdir}"]
             if sys.maxsize > 2**32:
                 cmake_args += ["-A", "x64"]
             build_args += ["--", "/m"]
         else:
             import multiprocessing
-            cmake_args += ["-DCMAKE_BUILD_TYPE=" + cfg]
-            build_args += ["--", '-j' + str(2 * multiprocessing.cpu_count())]
+            cmake_args += [f"-DCMAKE_BUILD_TYPE={cfg}"]
+            build_args += ["--", f'-j{str(2 * multiprocessing.cpu_count())}']
 
         env = os.environ.copy()
         subprocess.check_call(["cmake", self.base_dir] + cmake_args, cwd=self.build_temp, env=env)

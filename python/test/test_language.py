@@ -128,11 +128,7 @@ def test_compare_op(dtype_x, dtype_y, expr, device='cuda'):
 # ---------------
 # test unary ops
 # ---------------
-@pytest.mark.parametrize("dtype_x, expr", [
-    (dtype_x, f' -x') for dtype_x in float_dtypes
-] + [\
-    (dtype_x, f' ~x') for dtype_x in int_dtypes
-     ])
+@pytest.mark.parametrize("dtype_x, expr", ([(dtype_x, ' -x') for dtype_x in float_dtypes] + [(dtype_x, ' ~x') for dtype_x in int_dtypes]))
 def test_unary_op(dtype_x, expr, device='cuda'):
     _test_unary(dtype_x, expr, device=device)
 

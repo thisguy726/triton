@@ -36,14 +36,14 @@ def bench_matmul(M, N, K, block, layout_mode, op_mode, AT, BT, dtype, provider, 
     # creat inputs
     a = torch.randn((Z, H, K, M) if AT else (Z, H, M, K), dtype=dtype, device='cuda')
     b = torch.randn((Z, H, N, K) if BT else (Z, H, K, N), dtype=dtype, device='cuda')
-    # create op
-    tflops = lambda ms: num_flops / ms * 1e3
     if provider == 'triton':
         op = triton.ops.blocksparse.matmul(layout, block, op_mode, trans_a=AT, trans_b=BT)
         # inputs
         a = triton.testing.sparsify_tensor(a, layout, block) if op_mode == 'dsd' else a
         b = triton.testing.sparsify_tensor(b, layout, block) if op_mode == 'dds' else b
         mean_ms, min_ms, max_ms = triton.testing.do_bench(lambda: op(a, b), warmup=warmup, rep=rep)
+        # create op
+        tflops = lambda ms: num_flops / ms * 1e3
         num_flops = {
             'sdd': 2 * Z * K * float(layout.sum()) * block * block,\
             'dsd': 2 * Z * N * float(layout.sum()) * block * block,\
