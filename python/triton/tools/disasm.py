@@ -49,20 +49,18 @@ def processSassLines(fline, sline, labels):
     asm = FLINE_RE.match(fline).group(1)
     # Remove tailing space
     if asm.endswith(" ;"):
-        asm = asm[:-2] + ";"
+        asm = f"{asm[:-2]};"
     ctrl = parseCtrl(sline)
     # BRA target address
     if BRA_RE.match(asm) != None:
         target = int(BRA_RE.match(asm).group(2), 16)
-        if target in labels:
-            pass
-        else:
+        if target not in labels:
             labels[target] = len(labels)
     return (f'{ctrl}', f'{asm}')
 
 
 def extract(file_path, fun):
-    if fun == None:
+    if fun is None:
         sass_str = subprocess.check_output(["cuobjdump", "-sass", file_path])
     else:
         sass_str = subprocess.check_output(["cuobjdump", "-fun", fun, "-sass", file_path])
@@ -77,7 +75,7 @@ def extract(file_path, fun):
         #                 /*0x...*/
         fname_match = FNAME_RE.match(line)
         # Looking for new function header (function: <name>)
-        while FNAME_RE.match(line) == None:
+        while FNAME_RE.match(line) is None:
             line_idx += 1
             if line_idx < len(sass_lines):
                 line = sass_lines[line_idx].decode()

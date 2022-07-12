@@ -121,8 +121,8 @@ def do_bench(fn, warmup=25, rep=100, grad_to_none=None, percentiles=[0.2, 0.8]):
     # We maintain a buffer of 256 MB that we clear
     # before each kernel call to make sure that the L2
     # doesn't contain any input data before the run
-    start_event = [torch.cuda.Event(enable_timing=True) for i in range(rep)]
-    end_event = [torch.cuda.Event(enable_timing=True) for i in range(rep)]
+    start_event = [torch.cuda.Event(enable_timing=True) for _ in range(rep)]
+    end_event = [torch.cuda.Event(enable_timing=True) for _ in range(rep)]
     cache = torch.empty(int(256e6), dtype=torch.int8, device='cuda')
     # Warm-up
     for _ in range(int(warmup / estimate_ms)):
@@ -145,10 +145,7 @@ def do_bench(fn, warmup=25, rep=100, grad_to_none=None, percentiles=[0.2, 0.8]):
     times = torch.tensor([s.elapsed_time(e) for s, e in zip(start_event, end_event)])
     percentiles = torch.quantile(times, torch.tensor(percentiles)).tolist()
     med_ms = torch.median(times).item()
-    if percentiles:
-        return tuple([med_ms] + percentiles)
-    else:
-        return med_ms
+    return tuple([med_ms] + percentiles) if percentiles else med_ms
 
 
 class Benchmark:
@@ -243,14 +240,14 @@ class Mark:
             ax = plt.subplot()
             x = bench.x_names[0]
             for i, y in enumerate(bench.line_names):
-                y_min, y_max = df[y + '-min'], df[y + '-max']
+                y_min, y_max = df[f'{y}-min'], df[f'{y}-max']
                 col = bench.styles[i][0] if bench.styles else None
                 sty = bench.styles[i][1] if bench.styles else None
                 ax.plot(df[x], df[y], label=y, color=col, ls=sty)
                 if y_min is not None and y_max is not None:
                     ax.fill_between(df[x], y_min, y_max, alpha=0.15, color=col)
             ax.legend()
-            xlabel = bench.xlabel if bench.xlabel else " = ".join(bench.x_names)
+            xlabel = bench.xlabel or " = ".join(bench.x_names)
             ax.set_xlabel(xlabel)
             ax.set_ylabel(bench.ylabel)
             #ax.set_title(bench.plot_name)
@@ -262,7 +259,7 @@ class Mark:
                 plt.savefig(os.path.join(save_path, f"{bench.plot_name}.png"))
         df = df[[bench.x_names[0]] + bench.line_names]
         if print_data:
-            print(bench.plot_name + ':')
+            print(f'{bench.plot_name}:')
             print(df)
         if save_path:
             df.to_csv(os.path.join(save_path, f"{bench.plot_name}.csv"), float_format='%.1f', index=False)
@@ -288,5 +285,4 @@ def perf_report(benchmarks):
     :param benchmarks: Benchmarking configurations.
     :type benchmarks: List of :class:`Benchmark`
     """
-    wrapper = lambda fn: Mark(fn, benchmarks)
-    return wrapper
+    return lambda fn: Mark(fn, benchmarks)

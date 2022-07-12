@@ -138,8 +138,6 @@ import triton.language as tl
     ],
     key=['M', 'N', 'K'],
 )
-# %
-# We can now define our kernel as normal, using all the techniques presented above
 @triton.jit
 def _matmul(A, B, C, M, N, K, stride_am, stride_ak, stride_bk, stride_bn, stride_cm, stride_cn, **META):
     # extract meta-parameters
@@ -164,7 +162,7 @@ def _matmul(A, B, C, M, N, K, stride_am, stride_ak, stride_bk, stride_bn, stride
     A = A + (rm[:, None] * stride_am + rk[None, :] * stride_ak)
     B = B + (rk[:, None] * stride_bk + rn[None, :] * stride_bn)
     acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.float32)
-    for k in range(K, 0, -BLOCK_K):
+    for _ in range(K, 0, -BLOCK_K):
         a = tl.load(A)
         b = tl.load(B)
         acc += tl.dot(a, b)

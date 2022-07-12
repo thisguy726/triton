@@ -85,20 +85,7 @@ print(f'The maximum difference between torch and triton is ' f'{torch.max(torch.
 # for different problem sizes.
 
 
-@triton.testing.perf_report(
-    triton.testing.Benchmark(
-        x_names=['size'],  # argument names to use as an x-axis for the plot
-        x_vals=[2**i for i in range(12, 28, 1)],  # different possible values for `x_name`
-        x_log=True,  # x axis is logarithmic
-        line_arg='provider',  # argument name whose value corresponds to a different line in the plot
-        line_vals=['triton', 'torch'],  # possible values for `line_arg`
-        line_names=["Triton", "Torch"],  # label name for the lines
-        styles=[('blue', '-'), ('green', '-')],  # line styles
-        ylabel="GB/s",  # label name for the y-axis
-        plot_name="vector-add-performance",  # name for the plot. Used also as a file name for saving the plot.
-        args={}  # values for function arguments not in `x_names` and `y_name`
-    )
-)
+@triton.testing.perf_report(triton.testing.Benchmark(x_names=['size'], x_vals=[2**i for i in range(12, 28)], x_log=True, line_arg='provider', line_vals=['triton', 'torch'], line_names=["Triton", "Torch"], styles=[('blue', '-'), ('green', '-')], ylabel="GB/s", plot_name="vector-add-performance", args={}))
 def benchmark(size, provider):
     x = torch.rand(size, device='cuda', dtype=torch.float32)
     y = torch.rand(size, device='cuda', dtype=torch.float32)

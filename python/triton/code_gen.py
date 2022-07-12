@@ -56,7 +56,7 @@ class CodeGenerator(ast.NodeVisitor):
         self.module = _triton.ir.module('', self.builder)
         self.prototype = prototype
         self.gscope = gscope
-        self.lscope = dict()
+        self.lscope = {}
         self.attributes = attributes
         self.constants = constants
         self.kwargs = kwargs
@@ -77,24 +77,19 @@ class CodeGenerator(ast.NodeVisitor):
     def visit_List(self, node):
         ctx = self.visit(node.ctx)
         assert ctx is None
-        elts = [self.visit(elt) for elt in node.elts]
-        return elts
+        return [self.visit(elt) for elt in node.elts]
 
     # By design, only non-kernel functions can return
     def visit_Return(self, node):
         ret = self.visit(node.value)
-        if ret is None:
-            return self.builder.ret_void()
-        return ret
+        return self.builder.ret_void() if ret is None else ret
 
     def visit_FunctionDef(self, node, inline=False, arg_values=None):
         arg_names, kwarg_names = self.visit(node.args)
         # store keyword arguments in local scope
         self.lscope[kwarg_names] = self.kwargs
         # initialize function
-        if inline:
-            pass
-        else:
+        if not inline:
             fn = self.module.get_or_insert_function(node.name, self.prototype)
             arg_values = []
             for i, arg_name in enumerate(arg_names):
@@ -124,9 +119,7 @@ class CodeGenerator(ast.NodeVisitor):
             self.builder.ret_void()
 
     def visit_arguments(self, node):
-        arg_names = []
-        for arg in node.args:
-            arg_names += [self.visit(arg)]
+        arg_names = [self.visit(arg) for arg in node.args]
         kwarg_names = self.visit(node.kwarg)
         return arg_names, kwarg_names
 
@@ -135,9 +128,7 @@ class CodeGenerator(ast.NodeVisitor):
         return node.arg
 
     def visit_Assign(self, node):
-        _names = []
-        for target in node.targets:
-            _names += [self.visit(target)]
+        _names = [self.visit(target) for target in node.targets]
         assert len(_names) == 1
         names = _names[0]
         values = self.visit(node.value)
@@ -159,9 +150,7 @@ class CodeGenerator(ast.NodeVisitor):
         return self.get_value(name)
 
     def visit_Name(self, node):
-        if type(node.ctx) == ast.Store:
-            return node.id
-        return self.get_value(node.id)
+        return node.id if type(node.ctx) == ast.Store else self.get_value(node.id)
 
     def visit_Store(self, node):
         ast.NodeVisitor.generic_visit(self, node)
@@ -190,7 +179,7 @@ class CodeGenerator(ast.NodeVisitor):
             ast.BitOr: '__or__',
             ast.BitXor: '__xor__',
         }[type(node.op)]
-        kws = dict()
+        kws = {}
 
         if self.is_triton_object(lhs):
             kws['builder'] = self.builder
@@ -198,7 +187,7 @@ class CodeGenerator(ast.NodeVisitor):
         if ret is NotImplemented:
             if self.is_triton_object(rhs):
                 kws['builder'] = self.builder
-            fn = fn[:2] + 'r' + fn[2:]
+            fn = f'{fn[:2]}r{fn[2:]}'
             ret = getattr(rhs, fn)(lhs, **kws)
         return ret
 
@@ -228,15 +217,13 @@ class CodeGenerator(ast.NodeVisitor):
                     self.builder.br(endif_bb)
             self.module.seal_block(endif_bb)
             self.builder.set_insert_block(endif_bb)
+        elif cond:
+            self.visit_compound_statement(node.body)
         else:
-            if cond:
-                self.visit_compound_statement(node.body)
-            else:
-                self.visit_compound_statement(node.orelse)
+            self.visit_compound_statement(node.orelse)
 
     def visit_IfExp(self, node):
-        cond = self.visit(node.test)
-        if cond:
+        if cond := self.visit(node.test):
             return self.visit(node.body)
         else:
             return self.visit(node.orelse)
@@ -262,7 +249,7 @@ class CodeGenerator(ast.NodeVisitor):
         if self.is_triton_object(lhs):
             return getattr(lhs, fn)(rhs, builder=self.builder)
         elif self.is_triton_object(rhs):
-            fn = fn[:2] + 'r' + fn[2:]
+            fn = f'{fn[:2]}r{fn[2:]}'
             return getattr(rhs, fn)(lhs, builder=self.builder)
         else:
             return getattr(lhs, fn)(rhs)
@@ -373,9 +360,9 @@ class CodeGenerator(ast.NodeVisitor):
 
     def visit_Call(self, node):
         fn = self.visit(node.func)
-        kws = dict()
+        kws = {}
         for keyword in node.keywords:
-            kws.update(self.visit(keyword))
+            kws |= self.visit(keyword)
         args = [self.visit(arg) for arg in node.args]
         if isinstance(fn, JITFunction):
             return fn(*args, generator=self, **kws)
@@ -404,7 +391,7 @@ class CodeGenerator(ast.NodeVisitor):
 
     def generic_visit(self, node):
         typename = type(node).__name__
-        raise NotImplementedError("Unsupported node: {}".format(typename))
+        raise NotImplementedError(f"Unsupported node: {typename}")
 
 
 class Binary:
@@ -429,15 +416,14 @@ class Binary:
                 cubin = self.module.cubin()
                 # get a temporary file name
                 fd, path = tempfile.mkstemp(suffix='.cubin')
-                f = open(path, 'wb')
-                f.write(cubin)
-                f.close()
+                with open(path, 'wb') as f:
+                    f.write(cubin)
                 # extract SASS from cubin
                 self.sass = extract(path, None)
             return self.sass
         if mode == 'llir':
             return self.module.llir()
-        raise ValueError('Unsupported mode ' + mode)
+        raise ValueError(f'Unsupported mode {mode}')
 
     def __call__(self, stream, args, grid_0, grid_1=1, grid_2=1):
         stream.enqueue(self.kernel, grid_0, grid_1, grid_2, self.num_warps * 32, 1, 1, args, self.shared_mem)
@@ -519,8 +505,7 @@ class Kernel:
         if N % 16 == 0: return 16
         if N % 8 == 0: return 8
         if N % 4 == 0: return 4
-        if N % 2 == 0: return 2
-        return 1
+        return 2 if N % 2 == 0 else 1
 
     def __init__(self, fn):
         self.fn = fn
@@ -555,7 +540,7 @@ class Kernel:
     def __call__(self, *wargs, grid, num_warps=4, num_stages=2, force_nc_cache=False, **meta):
         # device inference
         tensor_idxs = [i for i, arg in enumerate(wargs) if hasattr(arg, 'data_ptr')]
-        if len(tensor_idxs) == 0:
+        if not tensor_idxs:
             raise ValueError("No Tensor argument found.")
         invalid_args = []
         for idx in tensor_idxs:
@@ -609,19 +594,13 @@ class Launcher:
 
 class Autotuner:
     def __init__(self, kernel, arg_names, configs, key):
-        if not configs:
-            self.configs = [Config(dict(), num_warps=4, num_stages=2)]
-        else:
-            self.configs = configs
+        self.configs = configs or [Config(dict(), num_warps=4, num_stages=2)]
         self.key_idx = [arg_names.index(k) for k in key]
-        self.cache = dict()
+        self.cache = {}
         self.kernel = kernel
 
     def _bench(self, *args, config, **meta):
-        # check for conflicts, i.e. meta-parameters both provided
-        # as kwargs and by the autotuner
-        conflicts = meta.keys() & config.meta.keys()
-        if conflicts:
+        if conflicts := meta.keys() & config.meta.keys():
             raise ValueError(
                 f"Conflicting meta-parameters: {', '.join(conflicts)}."
                 " Make sure that you don't re-define auto-tuned symbols."
@@ -633,7 +612,7 @@ class Autotuner:
 
     def __call__(self, *args, **meta):
         if len(self.configs) > 1:
-            key = tuple([args[i] for i in self.key_idx])
+            key = tuple(args[i] for i in self.key_idx)
             if key not in self.cache:
                 timings = {config: self._bench(*args, config=config, **meta) \
                         for config in self.configs}
@@ -649,7 +628,7 @@ class JITFunction:
         self.fn = fn
         self.module = fn.__module__
         self.arg_names = inspect.getfullargspec(fn).args
-        self.cache = dict()
+        self.cache = {}
         self.kernel_decorators = []
         self.src = textwrap.dedent(inspect.getsource(fn))
         self.kernel = None
